@@ -144,6 +144,7 @@ async function main() {
     const messagesToCreate: any[] = [];
     
     let totalConversationsCreated = 0;
+    const seenHashesInBatch = new Set<string>();
 
     for (const group of groups) {
       let conversationId: string | null = null;
@@ -175,8 +176,15 @@ async function main() {
         conversationsToUpdate.add(conversationId);
       }
 
-      // Adicionar apenas as mensagens que nao estao no banco
-      const newMessagesInGroup = group.filter(msg => !hashToConversationId.has(msg.contentHash));
+      // Adicionar apenas as mensagens que nao estao no banco e nem foram adicionadas neste mesmo lote
+      const newMessagesInGroup = group.filter(msg => {
+        if (hashToConversationId.has(msg.contentHash) || seenHashesInBatch.has(msg.contentHash)) {
+          return false;
+        }
+        seenHashesInBatch.add(msg.contentHash);
+        return true;
+      });
+
       for (const msg of newMessagesInGroup) {
         messagesToCreate.push({
           conversationId,
@@ -194,8 +202,7 @@ async function main() {
       const convChunkSize = 2000;
       for (let i = 0; i < conversationsToCreate.length; i += convChunkSize) {
         await prisma.legacyConversation.createMany({
-          data: conversationsToCreate.slice(i, i + convChunkSize),
-          skipDuplicates: true
+          data: conversationsToCreate.slice(i, i + convChunkSize)
         });
       }
     }
@@ -207,8 +214,7 @@ async function main() {
       for (let i = 0; i < messagesToCreate.length; i += msgChunkSize) {
         const chunk = messagesToCreate.slice(i, i + msgChunkSize);
         const created = await prisma.legacyMessage.createMany({
-          data: chunk,
-          skipDuplicates: true
+          data: chunk
         });
         totalInsertedMessages += created.count;
       }
