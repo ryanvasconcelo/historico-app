@@ -16,5 +16,31 @@ services:
       timeout: 5s
       retries: 10
 
+  backend:
+    build:
+      context: ./backend
+    container_name: historico-backend
+    ports:
+      - "3336:3001"
+    environment:
+      DATABASE_URL: "postgresql://historico:historico@postgres:5432/historico?schema=public"
+      CORS_ORIGIN: "http://localhost:3337"
+      PORT: 3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "npx prisma db push && npm run dev"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: historico-frontend
+    ports:
+      - "3337:5173"
+    environment:
+      VITE_PROXY_TARGET: "http://backend:3001"
+    depends_on:
+      - backend
+
 volumes:
   postgres-data:
